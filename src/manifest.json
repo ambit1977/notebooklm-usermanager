@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NotebookLM User Manager",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "NotebookLMの共有ユーザー追加を自動化するChrome拡張機能",
   "permissions": [
     "activeTab",
@@ -16,17 +16,16 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://notebooklm.google.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://notebooklm.google.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_end"
     }
   ],
   "background": {
     "service_worker": "background.js"
-  },
-  "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
   }
 }

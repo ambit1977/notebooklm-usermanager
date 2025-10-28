@@ -1,6 +1,6 @@
 {
   "name": "notebooklm-usermanager",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "NotebookLMの共有ユーザー追加を自動化するChrome拡張機能",
   "main": "index.js",
   "scripts": {
@@ -59,8 +59,12 @@
   "dependencies": {},
   "jest": {
     "testEnvironment": "jsdom",
-    "setupFilesAfterEnv": ["<rootDir>/src/tests/setup.js"],
-    "testMatch": ["<rootDir>/src/**/*.test.{js,ts}"],
+    "setupFilesAfterEnv": [
+      "<rootDir>/src/tests/setup.js"
+    ],
+    "testMatch": [
+      "<rootDir>/src/**/*.test.{js,ts}"
+    ],
     "collectCoverageFrom": [
       "src/**/*.{js,ts}",
       "!src/**/*.d.ts",

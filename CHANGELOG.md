@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.2] - 2025-10-28
+
+- Remove icon references from manifest
+
 ## [0.0.1] - 2025-01-XX
 
 ### Initial Release
