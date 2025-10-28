@@ -2,7 +2,7 @@
 import '@types/jest';
 
 // Mock Chrome APIs
-global.chrome = {
+(global as any).chrome = {
   runtime: {
     onMessage: {
       addListener: jest.fn()

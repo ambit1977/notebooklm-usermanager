@@ -5,8 +5,7 @@ module.exports = {
   entry: {
     popup: './src/popup.ts',
     content: './src/content.ts',
-    background: './src/background.ts',
-    debug: './src/debug.ts'
+    background: './src/background.ts'
   },
   output: {
     path: path.resolve(__dirname, 'dist/extension'),
@@ -18,7 +17,7 @@ module.exports = {
       {
         test: /\.ts$/,
         use: 'ts-loader',
-        exclude: /node_modules/
+        exclude: /node_modules|tests/
       },
       {
         test: /\.css$/,

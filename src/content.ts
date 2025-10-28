@@ -1,25 +1,4 @@
-interface Selectors {
-  shareButton: string;
-  shareMenu: string;
-  addUserButton: string;
-  emailInput: string;
-  roleSelect: string;
-  inviteButton: string;
-  dialog: string;
-  closeButton: string;
-  confirmButton: string;
-}
-
-interface MessageRequest {
-  action: 'checkPage' | 'addUser';
-  email?: string;
-  role?: string;
-}
-
-interface MessageResponse {
-  success: boolean;
-  message: string;
-}
+import { Selectors, MessageRequest, MessageResponse } from './types';
 
 class NotebookLMUserManager {
   private readonly SELECTORS: Selectors = {
@@ -43,6 +22,12 @@ class NotebookLMUserManager {
     chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendResponse) => {
       this.log('Received message:', request);
 
+      // pingハンドラー - content scriptが読み込まれているか確認
+      if (request.action === 'ping') {
+        sendResponse({ success: true, message: 'pong' });
+        return true;
+      }
+
       if (request.action === 'checkPage') {
         this.checkNotebookLMPage().then(sendResponse);
         return true; // 非同期レスポンスを示す
@@ -52,6 +37,14 @@ class NotebookLMUserManager {
         this.addUser(request.email!, request.role).then(sendResponse);
         return true; // 非同期レスポンスを示す
       }
+
+      if (request.action === 'log') {
+        this.log('Content script log:', request.message);
+        sendResponse({ success: true, message: 'Logged successfully' });
+        return true;
+      }
+
+      return false;
     });
   }
 

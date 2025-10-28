@@ -1,11 +1,4 @@
-interface MessageRequest {
-  action: 'log';
-  message: string;
-}
-
-interface MessageResponse {
-  success: boolean;
-}
+import { MessageRequest, MessageResponse } from './types';
 
 class BackgroundManager {
   constructor() {
@@ -55,7 +48,7 @@ class BackgroundManager {
 
     if (request.action === 'log') {
       this.log('NotebookLM User Manager Log:', request.message);
-      sendResponse({ success: true });
+      sendResponse({ success: true, message: 'Logged successfully' });
     }
 
     return true;

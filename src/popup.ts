@@ -1,12 +1,4 @@
-interface UserFormData {
-  email: string;
-  role: string;
-}
-
-interface MessageResponse {
-  success: boolean;
-  message: string;
-}
+import { UserFormData, MessageResponse } from './types';
 
 class PopupManager {
   private form: HTMLFormElement;
@@ -30,20 +22,49 @@ class PopupManager {
     // フォーム送信のイベント
     this.form.addEventListener('submit', this.handleFormSubmit.bind(this));
   }
+  
+  // content scriptが準備できているか確認
+  private async checkContentScriptReady(tabId: number): Promise<void> {
+    return new Promise((resolve) => {
+      chrome.tabs.sendMessage(tabId, { action: 'ping' }).then(() => {
+        resolve();
+      }).catch(async () => {
+        // content scriptが読み込まれていない場合、手動で注入
+        this.showStatus('info', 'content scriptを注入中...');
+        await chrome.scripting.executeScript({
+          target: { tabId: tabId },
+          files: ['content.js']
+        });
+        // 少し待ってから再試行
+        await new Promise(resolve => setTimeout(resolve, 500));
+        resolve();
+      });
+    });
+  }
 
   private async handleCheckPage(): Promise<void> {
     try {
       this.showStatus('info', 'NotebookLMページを確認中...');
 
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-      if (!tab.url?.includes('notebooklm.google.com')) {
+      
+      if (!tab || !tab.url?.includes('notebooklm.google.com')) {
         this.showStatus('error', 'NotebookLMページを開いてください');
         return;
       }
+      
+      // content scriptが既に読み込まれているか確認
+      await this.checkContentScriptReady(tab.id!);
 
       // Content scriptにページ確認を依頼
-      const response = await chrome.tabs.sendMessage(tab.id!, { action: 'checkPage' }) as MessageResponse;
+      let response: MessageResponse;
+      try {
+        response = await chrome.tabs.sendMessage(tab.id!, { action: 'checkPage' }) as MessageResponse;
+      } catch (error) {
+        // content scriptがまだ読み込まれていない場合
+        this.showStatus('error', 'content scriptが読み込まれていません。ページを再読み込みしてください。');
+        return;
+      }
 
       if (response.success) {
         this.showStatus('success', 'NotebookLMページが正常に認識されました');
@@ -72,18 +93,25 @@ class PopupManager {
 
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-      if (!tab.url?.includes('notebooklm.google.com')) {
+      if (!tab || !tab.url?.includes('notebooklm.google.com')) {
         this.showStatus('error', 'NotebookLMページを開いてください');
         this.showLoading(false);
         return;
       }
 
       // Content scriptにユーザー追加を依頼
-      const response = await chrome.tabs.sendMessage(tab.id!, {
-        action: 'addUser',
-        email: email,
-        role: role
-      }) as MessageResponse;
+      let response: MessageResponse;
+      try {
+        response = await chrome.tabs.sendMessage(tab.id!, {
+          action: 'addUser',
+          email: email,
+          role: role
+        }) as MessageResponse;
+      } catch (error) {
+        // content scriptがまだ読み込まれていない場合
+        this.showStatus('error', 'content scriptが読み込まれていません。ページを再読み込みしてください。');
+        return;
+      }
 
       if (response.success) {
         this.showStatus('success', `ユーザー "${email}" の追加が完了しました`);
