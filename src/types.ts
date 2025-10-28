@@ -13,8 +13,9 @@ export interface Selectors {
 }
 
 export interface MessageRequest {
-  action: 'checkPage' | 'addUser' | 'log' | 'ping';
+  action: 'checkPage' | 'addUser' | 'addMultipleUsers' | 'log' | 'ping';
   email?: string;
+  emails?: string[];
   role?: string;
   message?: string;
 }

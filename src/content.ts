@@ -38,6 +38,11 @@ class NotebookLMUserManager {
         return true; // 非同期レスポンスを示す
       }
 
+      if (request.action === 'addMultipleUsers') {
+        this.addMultipleUsers(request.emails!, request.role).then(sendResponse);
+        return true; // 非同期レスポンスを示す
+      }
+
       if (request.action === 'log') {
         this.log('Content script log:', request.message);
         sendResponse({ success: true, message: 'Logged successfully' });
@@ -141,6 +146,64 @@ class NotebookLMUserManager {
       return { success: false, message: 'NotebookLMページではありません' };
     } catch (error) {
       return { success: false, message: 'ページ確認中にエラーが発生しました: ' + (error as Error).message };
+    }
+  }
+
+  async addMultipleUsers(emails: string[], role = 'Editor'): Promise<MessageResponse> {
+    try {
+      this.log(`Starting to add ${emails.length} users with role ${role}`);
+      
+      // ステップ1: 共有ボタンをクリック
+      const shareClicked = await this.clickElement(this.SELECTORS.shareButton, 'Share button');
+      if (!shareClicked) {
+        throw new Error('共有ボタンが見つかりません');
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // ステップ2: ユーザー追加ボタンをクリック
+      const addUserClicked = await this.clickElement(this.SELECTORS.addUserButton, 'Add user button');
+      if (!addUserClicked) {
+        throw new Error('ユーザー追加ボタンが見つかりません');
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // ステップ3: 複数のメールアドレスを入力
+      const emailText = emails.join(', ');
+      const emailInputted = await this.inputText(this.SELECTORS.emailInput, emailText, 'Multiple email input');
+      if (!emailInputted) {
+        throw new Error('メールアドレス入力フィールドが見つかりません');
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // ステップ4: 権限を設定
+      if (role && role !== 'Editor') {
+        try {
+          const roleElement = await this.waitForElement(this.SELECTORS.roleSelect, 3000) as HTMLSelectElement;
+          if (roleElement) {
+            roleElement.value = role;
+            roleElement.dispatchEvent(new Event('change', { bubbles: true }));
+            this.log(`Role set to ${role}`);
+          }
+        } catch (error) {
+          this.log('Could not set role, using default');
+        }
+      }
+      
+      // ステップ5: 招待ボタンをクリック
+      const inviteClicked = await this.clickElement(this.SELECTORS.inviteButton, 'Invite button');
+      if (!inviteClicked) {
+        throw new Error('招待ボタンが見つかりません');
+      }
+      
+      this.log(`Successfully added ${emails.length} users: ${emails.join(', ')}`);
+      return { success: true, message: `${emails.length}人のユーザー追加が完了しました` };
+      
+    } catch (error) {
+      this.log('Error adding multiple users:', error);
+      return { success: false, message: (error as Error).message };
     }
   }
 

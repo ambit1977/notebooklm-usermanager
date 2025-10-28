@@ -80,10 +80,29 @@ class PopupManager {
     e.preventDefault();
 
     const email = (document.getElementById('email') as HTMLInputElement).value;
+    const emails = (document.getElementById('emails') as HTMLTextAreaElement).value;
+    const csvFile = (document.getElementById('csvFile') as HTMLInputElement).files?.[0];
     const role = (document.getElementById('role') as HTMLInputElement).value;
 
-    if (!email) {
-      this.showStatus('error', 'メールアドレスを入力してください');
+    // どの方法でユーザーを追加するか判定
+    let userEmails: string[] = [];
+    
+    if (csvFile) {
+      // CSVファイルから読み込み
+      userEmails = await this.parseCSVFile(csvFile);
+    } else if (emails.trim()) {
+      // カンマ区切りテキストから読み込み
+      userEmails = emails.split(',').map(e => e.trim()).filter(e => e);
+    } else if (email) {
+      // 単一メールアドレス
+      userEmails = [email];
+    } else {
+      this.showStatus('error', 'メールアドレスを入力するか、CSVファイルを選択してください');
+      return;
+    }
+
+    if (userEmails.length === 0) {
+      this.showStatus('error', '有効なメールアドレスが見つかりません');
       return;
     }
 
@@ -102,11 +121,19 @@ class PopupManager {
       // Content scriptにユーザー追加を依頼
       let response: MessageResponse;
       try {
-        response = await chrome.tabs.sendMessage(tab.id!, {
-          action: 'addUser',
-          email: email,
-          role: role
-        }) as MessageResponse;
+        if (userEmails.length === 1) {
+          response = await chrome.tabs.sendMessage(tab.id!, {
+            action: 'addUser',
+            email: userEmails[0],
+            role: role
+          }) as MessageResponse;
+        } else {
+          response = await chrome.tabs.sendMessage(tab.id!, {
+            action: 'addMultipleUsers',
+            emails: userEmails,
+            role: role
+          }) as MessageResponse;
+        }
       } catch (error) {
         // content scriptがまだ読み込まれていない場合
         this.showStatus('error', 'content scriptが読み込まれていません。ページを再読み込みしてください。');
@@ -114,7 +141,7 @@ class PopupManager {
       }
 
       if (response.success) {
-        this.showStatus('success', `ユーザー "${email}" の追加が完了しました`);
+        this.showStatus('success', `${userEmails.length}人のユーザー追加が完了しました`);
         this.form.reset();
       } else {
         this.showStatus('error', 'ユーザー追加に失敗しました: ' + response.message);
@@ -139,6 +166,38 @@ class PopupManager {
 
   private showLoading(show: boolean): void {
     this.loading.style.display = show ? 'block' : 'none';
+  }
+
+  // CSVファイルを解析してメールアドレスを抽出
+  private async parseCSVFile(file: File): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result as string;
+          const lines = text.split('\n');
+          const emails: string[] = [];
+          
+          for (const line of lines) {
+            // カンマ区切りで分割
+            const columns = line.split(',');
+            for (const column of columns) {
+              const trimmed = column.trim();
+              // メールアドレスの形式をチェック
+              if (trimmed.includes('@') && trimmed.includes('.')) {
+                emails.push(trimmed);
+              }
+            }
+          }
+          
+          resolve(emails.filter(email => email));
+        } catch (error) {
+          reject(error);
+        }
+      };
+      reader.onerror = () => reject(new Error('ファイルの読み込みに失敗しました'));
+      reader.readAsText(file);
+    });
   }
 }
 

@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.5] - 2025-10-28
+
+- Add multiple user addition support with CSV and comma-separated emails
+
 ## [0.0.4] - 2025-10-28
 
 - Fix content script communication error
