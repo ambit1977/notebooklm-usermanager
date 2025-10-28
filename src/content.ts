@@ -169,37 +169,84 @@ class NotebookLMUserManager {
       
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // ステップ3: 複数のメールアドレスを入力
-      const emailText = emails.join(', ');
-      const emailInputted = await this.inputText(this.SELECTORS.emailInput, emailText, 'Multiple email input');
-      if (!emailInputted) {
-        throw new Error('メールアドレス入力フィールドが見つかりません');
-      }
+      let successCount = 0;
+      let failedUsers: string[] = [];
       
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // ステップ4: 権限を設定
-      if (role && role !== 'Editor') {
+      // 各ユーザーを1人ずつ追加
+      for (let i = 0; i < emails.length; i++) {
+        const email = emails[i];
+        if (!email) {
+          this.log(`Skipping empty email at index ${i}`);
+          continue;
+        }
+        this.log(`Adding user ${i + 1}/${emails.length}: ${email}`);
+        
         try {
-          const roleElement = await this.waitForElement(this.SELECTORS.roleSelect, 3000) as HTMLSelectElement;
-          if (roleElement) {
-            roleElement.value = role;
-            roleElement.dispatchEvent(new Event('change', { bubbles: true }));
-            this.log(`Role set to ${role}`);
+          // ステップ3: メールアドレスまたはユーザー名を入力
+          const inputSuccess = await this.inputText(this.SELECTORS.emailInput, email, `Email input for ${email}`);
+          if (!inputSuccess) {
+            throw new Error(`メールアドレス入力フィールドが見つかりません: ${email}`);
           }
+          
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // ステップ4: 候補の一番上をクリック（選択）
+          const candidateSelected = await this.selectFirstCandidate();
+          if (!candidateSelected) {
+            throw new Error(`候補が見つかりません: ${email}`);
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // ステップ5: 権限を設定
+          const roleSet = await this.setUserRole(role);
+          if (!roleSet) {
+            this.log(`権限設定に失敗しましたが、続行します: ${email}`);
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // 次のユーザーを追加するためのボタンを探す
+          if (i < emails.length - 1) {
+            const nextUserAdded = await this.addNextUser();
+            if (!nextUserAdded) {
+              throw new Error(`次のユーザー追加ボタンが見つかりません: ${email}`);
+            }
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          
+          successCount++;
+          this.log(`Successfully added user: ${email}`);
+          
         } catch (error) {
-          this.log('Could not set role, using default');
+          this.log(`Failed to add user ${email}:`, error);
+          failedUsers.push(email);
+          
+          // エラーが発生した場合、次のユーザーに進むためにリセットを試行
+          try {
+            await this.resetUserAddition();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (resetError) {
+            this.log('Failed to reset user addition:', resetError);
+          }
         }
       }
       
-      // ステップ5: 招待ボタンをクリック
-      const inviteClicked = await this.clickElement(this.SELECTORS.inviteButton, 'Invite button');
-      if (!inviteClicked) {
-        throw new Error('招待ボタンが見つかりません');
+      // 最後に保存ボタンをクリック
+      const saveClicked = await this.clickElement(this.SELECTORS.inviteButton, 'Save button');
+      if (!saveClicked) {
+        this.log('Save button not found, but users may have been added');
       }
       
-      this.log(`Successfully added ${emails.length} users: ${emails.join(', ')}`);
-      return { success: true, message: `${emails.length}人のユーザー追加が完了しました` };
+      const message = `${successCount}人のユーザー追加が完了しました`;
+      if (failedUsers.length > 0) {
+        return { 
+          success: successCount > 0, 
+          message: `${message}。失敗: ${failedUsers.join(', ')}` 
+        };
+      }
+      
+      return { success: true, message };
       
     } catch (error) {
       this.log('Error adding multiple users:', error);
@@ -347,6 +394,170 @@ class NotebookLMUserManager {
   private log(message: string, data?: any): void {
     console.log('NotebookLM User Manager:', message, data || '');
   }
+
+  // 候補の一番上を選択
+  private async selectFirstCandidate(): Promise<boolean> {
+    try {
+      // 候補リストのセレクター（ドロップダウンメニューやリスト）
+      const candidateSelectors = [
+        '[role="listbox"] li:first-child',
+        '.suggestion-item:first-child',
+        '.dropdown-item:first-child',
+        '[data-testid*="suggestion"]:first-child',
+        '.autocomplete-item:first-child',
+        'li[role="option"]:first-child',
+        '.user-suggestion:first-child'
+      ];
+
+      for (const selector of candidateSelectors) {
+        try {
+          const element = await this.waitForElement(selector, 2000);
+          if (element) {
+            (element as HTMLElement).click();
+            this.log(`Selected first candidate with selector: ${selector}`);
+            return true;
+          }
+        } catch (error) {
+          // 次のセレクターを試す
+          continue;
+        }
+      }
+
+      // Enterキーを押して候補を選択
+      const inputElement = document.querySelector(this.SELECTORS.emailInput) as HTMLInputElement;
+      if (inputElement) {
+        inputElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        this.log('Pressed Enter to select candidate');
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      this.log('Failed to select first candidate:', error);
+      return false;
+    }
+  }
+
+  // ユーザーの権限を設定
+  private async setUserRole(role: string): Promise<boolean> {
+    try {
+      // 権限設定のセレクター
+      const roleSelectors = [
+        'select[aria-label*="role"]',
+        'select[aria-label*="権限"]',
+        '.role-selector select',
+        '[data-testid*="role"] select',
+        'select[name*="role"]',
+        'select[name*="permission"]'
+      ];
+
+      for (const selector of roleSelectors) {
+        try {
+          const roleElement = await this.waitForElement(selector, 2000) as HTMLSelectElement;
+          if (roleElement) {
+            // 権限の値を設定
+            const roleValue = this.mapRoleToValue(role);
+            roleElement.value = roleValue;
+            roleElement.dispatchEvent(new Event('change', { bubbles: true }));
+            this.log(`Role set to ${role} (${roleValue})`);
+            return true;
+          }
+        } catch (error) {
+          continue;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      this.log('Failed to set user role:', error);
+      return false;
+    }
+  }
+
+  // 権限名を値にマッピング
+  private mapRoleToValue(role: string): string {
+    const roleMap: { [key: string]: string } = {
+      'Editor': 'editor',
+      'Viewer': 'viewer',
+      'Owner': 'owner',
+      '編集者': 'editor',
+      '閲覧者': 'viewer',
+      'オーナー': 'owner'
+    };
+    return roleMap[role] || 'editor';
+  }
+
+  // 次のユーザーを追加するボタンを探す
+  private async addNextUser(): Promise<boolean> {
+    try {
+      const nextUserSelectors = [
+        'button[aria-label*="Add"]',
+        'button[aria-label*="追加"]',
+        'button:contains("Add another")',
+        'button:contains("別のユーザーを追加")',
+        '[data-testid*="add-another"]',
+        '.add-user-button',
+        'button[title*="Add"]'
+      ];
+
+      for (const selector of nextUserSelectors) {
+        try {
+          const element = await this.waitForElement(selector, 2000);
+          if (element) {
+            (element as HTMLElement).click();
+            this.log(`Clicked next user button with selector: ${selector}`);
+            return true;
+          }
+        } catch (error) {
+          continue;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      this.log('Failed to find next user button:', error);
+      return false;
+    }
+  }
+
+  // ユーザー追加をリセット
+  private async resetUserAddition(): Promise<boolean> {
+    try {
+      // 入力フィールドをクリア
+      const inputElement = document.querySelector(this.SELECTORS.emailInput) as HTMLInputElement;
+      if (inputElement) {
+        inputElement.value = '';
+        inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      // キャンセルボタンがあればクリック
+      const cancelSelectors = [
+        'button[aria-label*="Cancel"]',
+        'button[aria-label*="キャンセル"]',
+        'button:contains("Cancel")',
+        'button:contains("キャンセル")',
+        '[data-testid*="cancel"]'
+      ];
+
+      for (const selector of cancelSelectors) {
+        try {
+          const element = await this.waitForElement(selector, 1000);
+          if (element) {
+            (element as HTMLElement).click();
+            this.log(`Clicked cancel button with selector: ${selector}`);
+            return true;
+          }
+        } catch (error) {
+          continue;
+        }
+      }
+
+      return true;
+    } catch (error) {
+      this.log('Failed to reset user addition:', error);
+      return false;
+    }
+  }
 }
 
 // ページ読み込み完了時の初期化
@@ -357,3 +568,4 @@ if (document.readyState === 'loading') {
 } else {
   new NotebookLMUserManager();
 }
+

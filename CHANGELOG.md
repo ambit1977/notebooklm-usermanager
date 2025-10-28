@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.6] - 2025-10-28
+
+- Fix multiple user addition to work with NotebookLM's actual UI flow
+
 ## [0.0.5] - 2025-10-28
 
 - Add multiple user addition support with CSV and comma-separated emails
