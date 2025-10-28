@@ -1,0 +1,28 @@
+<!DOCTYPE html><html><body>
+<canvas width="128" height="128" style="background: #4285f4; border-radius: 50%;"></canvas>
+<script>
+  const canvas = document.querySelector('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  // Draw blue circle
+  ctx.fillStyle = '#4285f4';
+  ctx.beginPath();
+  ctx.arc(64, 64, 62, 0, 2 * Math.PI);
+  ctx.fill();
+  
+  // Draw white user icon
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(64, 56, 16, 0, 2 * Math.PI);
+  ctx.fill();
+  
+  // Draw user body
+  ctx.beginPath();
+  ctx.moveTo(32, 80);
+  ctx.quadraticCurveTo(32, 48, 64, 48);
+  ctx.quadraticCurveTo(96, 48, 96, 80);
+  ctx.lineTo(96, 96);
+  ctx.lineTo(32, 96);
+  ctx.closePath();
+  ctx.fill();
+</script></body></html>
