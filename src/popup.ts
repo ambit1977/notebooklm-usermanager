@@ -1,0 +1,120 @@
+interface UserFormData {
+  email: string;
+  role: string;
+}
+
+interface MessageResponse {
+  success: boolean;
+  message: string;
+}
+
+class PopupManager {
+  private form: HTMLFormElement;
+  private checkPageBtn: HTMLButtonElement;
+  private loading: HTMLElement;
+  private status: HTMLElement;
+
+  constructor() {
+    this.form = document.getElementById('userForm') as HTMLFormElement;
+    this.checkPageBtn = document.getElementById('checkPage') as HTMLButtonElement;
+    this.loading = document.getElementById('loading') as HTMLElement;
+    this.status = document.getElementById('status') as HTMLElement;
+
+    this.initializeEventListeners();
+  }
+
+  private initializeEventListeners(): void {
+    // ページ確認ボタンのイベント
+    this.checkPageBtn.addEventListener('click', this.handleCheckPage.bind(this));
+
+    // フォーム送信のイベント
+    this.form.addEventListener('submit', this.handleFormSubmit.bind(this));
+  }
+
+  private async handleCheckPage(): Promise<void> {
+    try {
+      this.showStatus('info', 'NotebookLMページを確認中...');
+
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+      if (!tab.url?.includes('notebooklm.google.com')) {
+        this.showStatus('error', 'NotebookLMページを開いてください');
+        return;
+      }
+
+      // Content scriptにページ確認を依頼
+      const response = await chrome.tabs.sendMessage(tab.id!, { action: 'checkPage' }) as MessageResponse;
+
+      if (response.success) {
+        this.showStatus('success', 'NotebookLMページが正常に認識されました');
+      } else {
+        this.showStatus('error', 'NotebookLMページの認識に失敗しました: ' + response.message);
+      }
+    } catch (error) {
+      this.showStatus('error', 'エラーが発生しました: ' + (error as Error).message);
+    }
+  }
+
+  private async handleFormSubmit(e: Event): Promise<void> {
+    e.preventDefault();
+
+    const email = (document.getElementById('email') as HTMLInputElement).value;
+    const role = (document.getElementById('role') as HTMLInputElement).value;
+
+    if (!email) {
+      this.showStatus('error', 'メールアドレスを入力してください');
+      return;
+    }
+
+    try {
+      this.showLoading(true);
+      this.showStatus('info', 'ユーザー追加を実行中...');
+
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+      if (!tab.url?.includes('notebooklm.google.com')) {
+        this.showStatus('error', 'NotebookLMページを開いてください');
+        this.showLoading(false);
+        return;
+      }
+
+      // Content scriptにユーザー追加を依頼
+      const response = await chrome.tabs.sendMessage(tab.id!, {
+        action: 'addUser',
+        email: email,
+        role: role
+      }) as MessageResponse;
+
+      if (response.success) {
+        this.showStatus('success', `ユーザー "${email}" の追加が完了しました`);
+        this.form.reset();
+      } else {
+        this.showStatus('error', 'ユーザー追加に失敗しました: ' + response.message);
+      }
+    } catch (error) {
+      this.showStatus('error', 'エラーが発生しました: ' + (error as Error).message);
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  private showStatus(type: 'success' | 'error' | 'info', message: string): void {
+    this.status.className = `status ${type}`;
+    this.status.textContent = message;
+    this.status.style.display = 'block';
+
+    // 3秒後にステータスを非表示
+    setTimeout(() => {
+      this.status.style.display = 'none';
+    }, 3000);
+  }
+
+  private showLoading(show: boolean): void {
+    this.loading.style.display = show ? 'block' : 'none';
+  }
+}
+
+// DOM読み込み完了時に初期化
+document.addEventListener('DOMContentLoaded', () => {
+  new PopupManager();
+});
