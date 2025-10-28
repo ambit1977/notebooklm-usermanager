@@ -1,44 +1,45 @@
 #!/usr/bin/env node
 
+/**
+ * Version Management Script
+ * Manages version increment for package.json and manifest.json
+ */
+
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
 class VersionManager {
-  private packageJsonPath: string;
-  private manifestJsonPath: string;
-  private changelogPath: string;
-
   constructor() {
     this.packageJsonPath = path.join(__dirname, '..', 'package.json');
     this.manifestJsonPath = path.join(__dirname, '..', 'src', 'manifest.json');
     this.changelogPath = path.join(__dirname, '..', 'CHANGELOG.md');
   }
 
-  public getCurrentVersion(): string {
+  getCurrentVersion() {
     const packageJson = JSON.parse(fs.readFileSync(this.packageJsonPath, 'utf8'));
     return packageJson.version;
   }
 
-  public incrementPatchVersion(currentVersion: string): string {
+  incrementPatchVersion(currentVersion) {
     const parts = currentVersion.split('.');
     const patch = parseInt(parts[2]) + 1;
     return `${parts[0]}.${parts[1]}.${patch}`;
   }
 
-  public incrementMinorVersion(currentVersion: string): string {
+  incrementMinorVersion(currentVersion) {
     const parts = currentVersion.split('.');
     const minor = parseInt(parts[1]) + 1;
     return `${parts[0]}.${minor}.0`;
   }
 
-  public incrementMajorVersion(currentVersion: string): string {
+  incrementMajorVersion(currentVersion) {
     const parts = currentVersion.split('.');
     const major = parseInt(parts[0]) + 1;
     return `${major}.0.0`;
   }
 
-  public updateVersion(newVersion: string, changeDescription: string = ''): void {
+  updateVersion(newVersion, changeDescription = '') {
     console.log(`Updating version from ${this.getCurrentVersion()} to ${newVersion}`);
 
     // package.jsonを更新
@@ -57,7 +58,7 @@ class VersionManager {
     console.log(`Version updated to ${newVersion}`);
   }
 
-  private updateChangelog(version: string, description: string): void {
+  updateChangelog(version, description) {
     const today = new Date().toISOString().split('T')[0];
     const changelogEntry = `## [${version}] - ${today}\n${description ? `\n- ${description}\n` : '\n'}`;
 
@@ -81,14 +82,14 @@ class VersionManager {
     }
   }
 
-  public commitVersion(newVersion: string): void {
+  commitVersion(newVersion) {
     execSync(`git add package.json src/manifest.json CHANGELOG.md`, { stdio: 'inherit' });
     execSync(`git commit -m "chore: bump version to ${newVersion}"`, { stdio: 'inherit' });
     execSync(`git tag -a v${newVersion} -m "Version ${newVersion}"`, { stdio: 'inherit' });
     console.log(`Version ${newVersion} committed and tagged`);
   }
 
-  public pushVersion(): void {
+  pushVersion() {
     execSync('git push origin main --tags', { stdio: 'inherit' });
     console.log('Version pushed to remote');
   }
@@ -142,3 +143,5 @@ try {
   console.error('Error:', error);
   process.exit(1);
 }
+
+module.exports = VersionManager;
