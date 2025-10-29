@@ -20,7 +20,7 @@ export interface Selectors {
 }
 
 export interface MessageRequest {
-  action: 'checkPage' | 'addUser' | 'addMultipleUsers' | 'debugUI' | 'log' | 'ping';
+  action: 'checkPage' | 'addUser' | 'addMultipleUsers' | 'debugUI' | 'debugShareDialog' | 'log' | 'ping';
   email?: string;
   emails?: string[];
   role?: string;

@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.9] - 2025-10-29
+
+- Add button safety checks and share dialog debugging to prevent clicking wrong buttons
+
 ## [0.0.8] - 2025-10-29
 
 - Update selectors based on actual NotebookLM UI structure investigation

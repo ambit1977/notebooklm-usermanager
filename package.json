@@ -1,6 +1,6 @@
 {
   "name": "notebooklm-usermanager",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "NotebookLMの共有ユーザー追加を自動化するChrome拡張機能",
   "main": "index.js",
   "scripts": {

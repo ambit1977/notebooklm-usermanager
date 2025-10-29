@@ -17,7 +17,7 @@ class NotebookLMUserManager {
     suggestionList: 'body > div.peoplekit-autocomplete-anchor ul[role="listbox"]',
     firstSuggestion: 'body > div.peoplekit-autocomplete-anchor ul[role="listbox"] div[role="option"]:first-child',
     nextUserButton: 'button[aria-label*="別のユーザー"], button:contains("別のユーザー")',
-    saveButton: 'button[aria-label*="保存"], button:contains("保存"), button[aria-label*="送信"], button:contains("送信")'
+    saveButton: 'button[aria-label*="保存"], button:contains("保存"), button[aria-label*="送信"], button:contains("送信"), button[type="submit"]:not([aria-label*="ソース"]):not(:contains("ソース"))'
   };
 
   constructor() {
@@ -52,6 +52,11 @@ class NotebookLMUserManager {
 
       if (request.action === 'debugUI') {
         this.debugNotebookLMUI().then(sendResponse);
+        return true;
+      }
+
+      if (request.action === 'debugShareDialog') {
+        this.debugShareDialog().then(sendResponse);
         return true;
       }
 
@@ -95,23 +100,61 @@ class NotebookLMUserManager {
 
   private async clickElement(selector: string, description: string): Promise<boolean> {
     try {
+      this.log(`Looking for element: ${description} with selector: ${selector}`);
+      
       const element = await this.waitForElement(selector, 5000);
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      await new Promise(resolve => setTimeout(resolve, 500));
+      if (element) {
+        // クリック前にボタンの詳細情報をログ出力
+        const buttonInfo = {
+          tagName: element.tagName,
+          textContent: element.textContent?.trim(),
+          ariaLabel: element.getAttribute('aria-label'),
+          className: element.className,
+          id: element.id,
+          type: element.getAttribute('type'),
+          href: element.getAttribute('href')
+        };
+        
+        this.log(`About to click button: ${description}`, buttonInfo);
+        
+        // 危険なボタンかチェック
+        const dangerousTexts = ['ソースを探す', 'Add source', 'ソースを追加', 'Add source'];
+        const buttonText = buttonInfo.textContent?.toLowerCase() || '';
+        const ariaLabel = buttonInfo.ariaLabel?.toLowerCase() || '';
+        
+        for (const dangerousText of dangerousTexts) {
+          if (buttonText.includes(dangerousText.toLowerCase()) || ariaLabel.includes(dangerousText.toLowerCase())) {
+            this.log(`WARNING: Potentially dangerous button detected: ${dangerousText}`);
+            this.log(`Button details:`, buttonInfo);
+            
+            // ソース関連のボタンは避ける
+            if (dangerousText.includes('ソース') || dangerousText.includes('source')) {
+              this.log(`Skipping source-related button: ${description}`);
+              return false;
+            }
+          }
+        }
+        
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await new Promise(resolve => setTimeout(resolve, 500));
 
-      // 複数のクリック方法を試す
-      if ('click' in element && typeof element.click === 'function') {
-        (element as HTMLElement).click();
-      } else {
-        element.dispatchEvent(new MouseEvent('click', {
-          view: window,
-          bubbles: true,
-          cancelable: true
-        }));
+        // 複数のクリック方法を試す
+        if ('click' in element && typeof element.click === 'function') {
+          (element as HTMLElement).click();
+        } else {
+          element.dispatchEvent(new MouseEvent('click', {
+            view: window,
+            bubbles: true,
+            cancelable: true
+          }));
+        }
+
+        this.log(`Successfully clicked: ${description}`);
+        return true;
       }
-
-      this.log(`${description} clicked`);
-      return true;
+      
+      this.log(`Element not found: ${description}`);
+      return false;
     } catch (error) {
       this.log(`Failed to click ${description}:`, error);
       return false;
@@ -240,9 +283,8 @@ class NotebookLMUserManager {
         }
       }
       
-      // 最後に保存ボタンをクリック
-      const saveClicked = await this.clickElement(this.SELECTORS.saveButton, 'Save button') ||
-                         await this.clickElement(this.SELECTORS.inviteButton, 'Invite button');
+      // 最後に保存ボタンをクリック（ソース関連ボタンを避ける）
+      const saveClicked = await this.clickSaveButtonSafely();
       if (!saveClicked) {
         this.log('Save button not found, but users may have been added');
       }
@@ -402,6 +444,143 @@ class NotebookLMUserManager {
 
   private log(message: string, data?: any): void {
     console.log('NotebookLM User Manager:', message, data || '');
+  }
+
+  // 保存ボタンを安全にクリック（ソース関連ボタンを避ける）
+  private async clickSaveButtonSafely(): Promise<boolean> {
+    try {
+      const dialog = document.querySelector('[role="dialog"]');
+      if (!dialog) {
+        this.log('Dialog not found');
+        return false;
+      }
+
+      // 共有ダイアログ内のすべてのボタンを取得
+      const allButtons = Array.from(dialog.querySelectorAll('button'));
+      
+      // 保存/送信/招待関連のボタンを探す（ソース関連を除外）
+      const saveButtonTexts = ['保存', '送信', '招待', 'Save', 'Send', 'Invite', 'Submit'];
+      const dangerousTexts = ['ソース', 'source'];
+      
+      for (const button of allButtons) {
+        const text = button.textContent?.toLowerCase() || '';
+        const ariaLabel = button.getAttribute('aria-label')?.toLowerCase() || '';
+        const type = button.getAttribute('type');
+        
+        // 危険なボタンかチェック
+        let isDangerous = false;
+        for (const dangerousText of dangerousTexts) {
+          if (text.includes(dangerousText.toLowerCase()) || ariaLabel.includes(dangerousText.toLowerCase())) {
+            isDangerous = true;
+            this.log(`Skipping dangerous button: ${text || ariaLabel}`);
+            break;
+          }
+        }
+        
+        if (isDangerous) {
+          continue;
+        }
+        
+        // 保存ボタンの条件をチェック
+        let isSaveButton = false;
+        
+        // テキストまたはaria-labelでマッチ
+        for (const saveText of saveButtonTexts) {
+          if (text.includes(saveText.toLowerCase()) || ariaLabel.includes(saveText.toLowerCase())) {
+            isSaveButton = true;
+            break;
+          }
+        }
+        
+        // type="submit"も候補
+        if (type === 'submit' && !isDangerous) {
+          isSaveButton = true;
+        }
+        
+        if (isSaveButton) {
+          this.log(`Found safe save button: ${text || ariaLabel}`);
+          (button as HTMLElement).click();
+          return true;
+        }
+      }
+      
+      this.log('No safe save button found');
+      return false;
+    } catch (error) {
+      this.log('Error in clickSaveButtonSafely:', error);
+      return false;
+    }
+  }
+
+  // 共有ダイアログの詳細デバッグ
+  private async debugShareDialog(): Promise<MessageResponse> {
+    try {
+      this.log('Starting share dialog debug...');
+      
+      // 共有ダイアログが開いているかチェック
+      const dialog = document.querySelector('[role="dialog"]');
+      if (!dialog) {
+        return { 
+          success: false, 
+          message: '共有ダイアログが開いていません。まず共有ボタンをクリックしてください。' 
+        };
+      }
+      
+      const dialogInfo = {
+        dialogFound: true,
+        dialogText: dialog.textContent?.substring(0, 200) + '...',
+        allButtons: Array.from(dialog.querySelectorAll('button')).map(btn => ({
+          text: btn.textContent?.trim(),
+          ariaLabel: btn.getAttribute('aria-label'),
+          className: btn.className,
+          id: btn.id,
+          type: btn.getAttribute('type')
+        })),
+        allInputs: Array.from(dialog.querySelectorAll('input')).map(input => ({
+          type: input.type,
+          placeholder: input.placeholder,
+          className: input.className,
+          id: input.id,
+          peoplekitautocomplete: input.hasAttribute('peoplekitautocomplete')
+        })),
+        potentialSaveButtons: Array.from(dialog.querySelectorAll('button')).filter(btn => {
+          const text = btn.textContent?.toLowerCase() || '';
+          const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+          return text.includes('保存') || text.includes('送信') || text.includes('招待') ||
+                 ariaLabel.includes('保存') || ariaLabel.includes('送信') || ariaLabel.includes('招待') ||
+                 btn.getAttribute('type') === 'submit';
+        }).map(btn => ({
+          text: btn.textContent?.trim(),
+          ariaLabel: btn.getAttribute('aria-label'),
+          className: btn.className,
+          id: btn.id,
+          type: btn.getAttribute('type')
+        })),
+        dangerousButtons: Array.from(dialog.querySelectorAll('button')).filter(btn => {
+          const text = btn.textContent?.toLowerCase() || '';
+          const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+          return text.includes('ソース') || text.includes('source') ||
+                 ariaLabel.includes('ソース') || ariaLabel.includes('source');
+        }).map(btn => ({
+          text: btn.textContent?.trim(),
+          ariaLabel: btn.getAttribute('aria-label'),
+          className: btn.className,
+          id: btn.id,
+          type: btn.getAttribute('type')
+        }))
+      };
+
+      this.log('Share dialog debug info:', dialogInfo);
+      
+      return { 
+        success: true, 
+        message: `共有ダイアログの調査が完了しました。コンソールで詳細を確認してください。` 
+      };
+      
+    } catch (error) {
+      this.log('Debug share dialog error:', error);
+      return { success: false, message: '共有ダイアログのデバッグ中にエラーが発生しました: ' + (error as Error).message };
+    }
   }
 
   // NotebookLMのUI構造をデバッグ
