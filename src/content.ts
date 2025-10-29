@@ -43,6 +43,11 @@ class NotebookLMUserManager {
         return true; // 非同期レスポンスを示す
       }
 
+      if (request.action === 'debugUI') {
+        this.debugNotebookLMUI().then(sendResponse);
+        return true;
+      }
+
       if (request.action === 'log') {
         this.log('Content script log:', request.message);
         sendResponse({ success: true, message: 'Logged successfully' });
@@ -393,6 +398,147 @@ class NotebookLMUserManager {
 
   private log(message: string, data?: any): void {
     console.log('NotebookLM User Manager:', message, data || '');
+  }
+
+  // NotebookLMのUI構造をデバッグ
+  private async debugNotebookLMUI(): Promise<MessageResponse> {
+    try {
+      this.log('Starting NotebookLM UI debug...');
+      
+      const debugInfo = {
+        url: window.location.href,
+        title: document.title,
+        timestamp: new Date().toISOString(),
+        elements: {
+          buttons: document.querySelectorAll('button').length,
+          inputs: document.querySelectorAll('input').length,
+          selects: document.querySelectorAll('select').length,
+          dialogs: document.querySelectorAll('[role="dialog"]').length,
+          lists: document.querySelectorAll('[role="listbox"]').length
+        },
+        potentialElements: {
+          shareButtons: this.findElementsByText('button', ['Share', '共有', 'シェア']),
+          addUserButtons: this.findElementsByText('button', ['Add', '追加', 'Add user', 'ユーザー追加']),
+          emailInputs: this.findElementsByAttribute('input', ['type', 'placeholder'], ['email', 'Email', 'メール']),
+          roleSelects: this.findElementsByAttribute('select', ['aria-label', 'name'], ['role', '権限', 'permission']),
+          suggestionLists: this.findElementsByAttribute('*', ['role', 'class'], ['listbox', 'suggestion', 'dropdown']),
+          saveButtons: this.findElementsByText('button', ['Save', '保存', 'Send', '送信', 'Invite', '招待'])
+        },
+        allButtons: this.getAllButtons(),
+        allInputs: this.getAllInputs(),
+        allSelects: this.getAllSelects()
+      };
+
+      this.log('Debug info collected:', debugInfo);
+      
+      return { 
+        success: true, 
+        message: `UI構造の調査が完了しました。コンソールで詳細を確認してください。` 
+      };
+      
+    } catch (error) {
+      this.log('Debug UI error:', error);
+      return { success: false, message: 'デバッグ中にエラーが発生しました: ' + (error as Error).message };
+    }
+  }
+
+  // テキストで要素を検索
+  private findElementsByText(tagName: string, texts: string[]): Array<{text: string, element: Element}> {
+    const elements: Array<{text: string, element: Element}> = [];
+    const allElements = document.querySelectorAll(tagName);
+    
+    for (const element of allElements) {
+      const text = element.textContent?.toLowerCase() || '';
+      for (const searchText of texts) {
+        if (text.includes(searchText.toLowerCase())) {
+          elements.push({ text: element.textContent || '', element });
+          break;
+        }
+      }
+    }
+    
+    return elements;
+  }
+
+  // 属性で要素を検索
+  private findElementsByAttribute(tagName: string, attributes: string[], values: string[]): Array<{attribute: string, value: string, element: Element}> {
+    const elements: Array<{attribute: string, value: string, element: Element}> = [];
+    const allElements = document.querySelectorAll(tagName);
+    
+    for (const element of allElements) {
+      for (const attr of attributes) {
+        const attrValue = element.getAttribute(attr)?.toLowerCase() || '';
+        for (const searchValue of values) {
+          if (attrValue.includes(searchValue.toLowerCase())) {
+            elements.push({ 
+              attribute: attr, 
+              value: element.getAttribute(attr) || '', 
+              element 
+            });
+            break;
+          }
+        }
+      }
+    }
+    
+    return elements;
+  }
+
+  // すべてのボタンを取得
+  private getAllButtons(): Array<{text: string, ariaLabel: string, className: string, id: string}> {
+    const buttons: Array<{text: string, ariaLabel: string, className: string, id: string}> = [];
+    const allButtons = document.querySelectorAll('button');
+    
+    for (const button of allButtons) {
+      buttons.push({
+        text: button.textContent || '',
+        ariaLabel: button.getAttribute('aria-label') || '',
+        className: button.className,
+        id: button.id
+      });
+    }
+    
+    return buttons;
+  }
+
+  // すべての入力フィールドを取得
+  private getAllInputs(): Array<{type: string, placeholder: string, className: string, id: string}> {
+    const inputs: Array<{type: string, placeholder: string, className: string, id: string}> = [];
+    const allInputs = document.querySelectorAll('input');
+    
+    for (const input of allInputs) {
+      inputs.push({
+        type: input.type,
+        placeholder: input.placeholder || '',
+        className: input.className,
+        id: input.id
+      });
+    }
+    
+    return inputs;
+  }
+
+  // すべてのセレクトを取得
+  private getAllSelects(): Array<{ariaLabel: string, className: string, id: string, options: string[]}> {
+    const selects: Array<{ariaLabel: string, className: string, id: string, options: string[]}> = [];
+    const allSelects = document.querySelectorAll('select');
+    
+    for (const select of allSelects) {
+      const options: string[] = [];
+      const optionElements = select.querySelectorAll('option');
+      for (const option of optionElements) {
+        options.push(option.textContent || '');
+      }
+      
+      selects.push({
+        ariaLabel: select.getAttribute('aria-label') || '',
+        className: select.className,
+        id: select.id,
+        options
+      });
+    }
+    
+    return selects;
   }
 
   // 候補の一番上を選択

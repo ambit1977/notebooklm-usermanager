@@ -3,12 +3,14 @@ import { UserFormData, MessageResponse } from './types';
 class PopupManager {
   private form: HTMLFormElement;
   private checkPageBtn: HTMLButtonElement;
+  private debugUIBtn: HTMLButtonElement;
   private loading: HTMLElement;
   private status: HTMLElement;
 
   constructor() {
     this.form = document.getElementById('userForm') as HTMLFormElement;
     this.checkPageBtn = document.getElementById('checkPage') as HTMLButtonElement;
+    this.debugUIBtn = document.getElementById('debugUI') as HTMLButtonElement;
     this.loading = document.getElementById('loading') as HTMLElement;
     this.status = document.getElementById('status') as HTMLElement;
 
@@ -19,8 +21,44 @@ class PopupManager {
     // ページ確認ボタンのイベント
     this.checkPageBtn.addEventListener('click', this.handleCheckPage.bind(this));
 
+    // デバッグボタンのイベント
+    this.debugUIBtn.addEventListener('click', this.handleDebugUI.bind(this));
+
     // フォーム送信のイベント
     this.form.addEventListener('submit', this.handleFormSubmit.bind(this));
+  }
+
+  private async handleDebugUI(): Promise<void> {
+    try {
+      this.showStatus('info', 'NotebookLMのUI構造を調査中...');
+
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      if (!tab || !tab.url?.includes('notebooklm.google.com')) {
+        this.showStatus('error', 'NotebookLMページを開いてください');
+        return;
+      }
+      
+      // content scriptが既に読み込まれているか確認
+      await this.checkContentScriptReady(tab.id!);
+
+      // Content scriptにUI調査を依頼
+      let response: MessageResponse;
+      try {
+        response = await chrome.tabs.sendMessage(tab.id!, { action: 'debugUI' }) as MessageResponse;
+      } catch (error) {
+        this.showStatus('error', 'content scriptが読み込まれていません。ページを再読み込みしてください。');
+        return;
+      }
+
+      if (response.success) {
+        this.showStatus('success', 'UI構造の調査が完了しました。ブラウザの開発者ツールのコンソールで詳細を確認してください。');
+      } else {
+        this.showStatus('error', 'UI調査に失敗しました: ' + response.message);
+      }
+    } catch (error) {
+      this.showStatus('error', 'エラーが発生しました: ' + (error as Error).message);
+    }
   }
   
   // content scriptが準備できているか確認

@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.7] - 2025-10-29
+
+- Add UI debugging functionality to investigate NotebookLM structure
+
 ## [0.0.6] - 2025-10-28
 
 - Fix multiple user addition to work with NotebookLM's actual UI flow
