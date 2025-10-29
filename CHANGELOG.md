@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.8] - 2025-10-29
+
+- Update selectors based on actual NotebookLM UI structure investigation
+
 ## [0.0.7] - 2025-10-29
 
 - Add UI debugging functionality to investigate NotebookLM structure

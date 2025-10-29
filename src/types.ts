@@ -10,6 +10,13 @@ export interface Selectors {
   dialog: string;
   closeButton: string;
   confirmButton: string;
+  // 新しいセレクター
+  shareButtonExact: string;
+  emailInputExact: string;
+  suggestionList: string;
+  firstSuggestion: string;
+  nextUserButton: string;
+  saveButton: string;
 }
 
 export interface MessageRequest {

@@ -2,15 +2,22 @@ import { Selectors, MessageRequest, MessageResponse } from './types';
 
 class NotebookLMUserManager {
   private readonly SELECTORS: Selectors = {
-    shareButton: '[data-testid="share-button"], button[aria-label*="Share"], button[aria-label*="共有"]',
+    shareButton: 'share-button button[aria-label*="共有"]',
     shareMenu: '[role="menu"], .share-menu, [data-testid="share-menu"]',
     addUserButton: 'button[aria-label*="Add"], button[aria-label*="追加"], [data-testid="add-user"]',
-    emailInput: 'input[type="email"], input[placeholder*="email"], input[placeholder*="メール"]',
+    emailInput: 'input[peoplekitautocomplete]',
     roleSelect: 'select, [role="combobox"], [data-testid="role-select"]',
     inviteButton: 'button[type="submit"], button[aria-label*="Invite"], button[aria-label*="招待"]',
     dialog: '[role="dialog"], .dialog, .modal',
     closeButton: 'button[aria-label*="Close"], button[aria-label*="閉じる"], [data-testid="close"]',
-    confirmButton: 'button[aria-label*="Confirm"], button[aria-label*="確認"], [data-testid="confirm"]'
+    confirmButton: 'button[aria-label*="Confirm"], button[aria-label*="確認"], [data-testid="confirm"]',
+    // 新しいセレクター（調査結果に基づく）
+    shareButtonExact: 'body > labs-tailwind-root > div > notebook > notebook-header > div > page-header > div > div.notebook-header-buttons-container > div > share-button button',
+    emailInputExact: '#mat-mdc-dialog-24 input[peoplekitautocomplete], [role="dialog"] input[peoplekitautocomplete]',
+    suggestionList: 'body > div.peoplekit-autocomplete-anchor ul[role="listbox"]',
+    firstSuggestion: 'body > div.peoplekit-autocomplete-anchor ul[role="listbox"] div[role="option"]:first-child',
+    nextUserButton: 'button[aria-label*="別のユーザー"], button:contains("別のユーザー")',
+    saveButton: 'button[aria-label*="保存"], button:contains("保存"), button[aria-label*="送信"], button:contains("送信")'
   };
 
   constructor() {
@@ -158,21 +165,14 @@ class NotebookLMUserManager {
     try {
       this.log(`Starting to add ${emails.length} users with role ${role}`);
       
-      // ステップ1: 共有ボタンをクリック
-      const shareClicked = await this.clickElement(this.SELECTORS.shareButton, 'Share button');
+      // ステップ1: 共有ボタンをクリック（正確なセレクターを使用）
+      const shareClicked = await this.clickElement(this.SELECTORS.shareButtonExact, 'Share button (exact)') ||
+                          await this.clickElement(this.SELECTORS.shareButton, 'Share button (fallback)');
       if (!shareClicked) {
         throw new Error('共有ボタンが見つかりません');
       }
       
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // ステップ2: ユーザー追加ボタンをクリック
-      const addUserClicked = await this.clickElement(this.SELECTORS.addUserButton, 'Add user button');
-      if (!addUserClicked) {
-        throw new Error('ユーザー追加ボタンが見つかりません');
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       let successCount = 0;
       let failedUsers: string[] = [];
@@ -187,26 +187,29 @@ class NotebookLMUserManager {
         this.log(`Adding user ${i + 1}/${emails.length}: ${email}`);
         
         try {
-          // ステップ3: メールアドレスまたはユーザー名を入力
-          const inputSuccess = await this.inputText(this.SELECTORS.emailInput, email, `Email input for ${email}`);
+          // ステップ2: メールアドレスを入力（正確なセレクターを使用）
+          const inputSuccess = await this.inputText(this.SELECTORS.emailInputExact, email, `Email input for ${email}`) ||
+                              await this.inputText(this.SELECTORS.emailInput, email, `Email input for ${email}`);
           if (!inputSuccess) {
             throw new Error(`メールアドレス入力フィールドが見つかりません: ${email}`);
           }
           
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 1500));
           
-          // ステップ4: 候補の一番上をクリック（選択）
-          const candidateSelected = await this.selectFirstCandidate();
+          // ステップ3: 候補の一番上をクリック（正確なセレクターを使用）
+          const candidateSelected = await this.selectFirstCandidateExact();
           if (!candidateSelected) {
             throw new Error(`候補が見つかりません: ${email}`);
           }
           
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
-          // ステップ5: 権限を設定
-          const roleSet = await this.setUserRole(role);
-          if (!roleSet) {
-            this.log(`権限設定に失敗しましたが、続行します: ${email}`);
+          // ステップ4: 権限を設定（必要に応じて）
+          if (role && role !== 'Editor') {
+            const roleSet = await this.setUserRole(role);
+            if (!roleSet) {
+              this.log(`権限設定に失敗しましたが、続行します: ${email}`);
+            }
           }
           
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -215,7 +218,7 @@ class NotebookLMUserManager {
           if (i < emails.length - 1) {
             const nextUserAdded = await this.addNextUser();
             if (!nextUserAdded) {
-              throw new Error(`次のユーザー追加ボタンが見つかりません: ${email}`);
+              this.log(`次のユーザー追加ボタンが見つかりませんが、続行します: ${email}`);
             }
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
@@ -238,7 +241,8 @@ class NotebookLMUserManager {
       }
       
       // 最後に保存ボタンをクリック
-      const saveClicked = await this.clickElement(this.SELECTORS.inviteButton, 'Save button');
+      const saveClicked = await this.clickElement(this.SELECTORS.saveButton, 'Save button') ||
+                         await this.clickElement(this.SELECTORS.inviteButton, 'Invite button');
       if (!saveClicked) {
         this.log('Save button not found, but users may have been added');
       }
@@ -539,6 +543,60 @@ class NotebookLMUserManager {
     }
     
     return selects;
+  }
+
+  // 候補の一番上を選択（正確なセレクターを使用）
+  private async selectFirstCandidateExact(): Promise<boolean> {
+    try {
+      // 正確なセレクターで候補を探す
+      const firstSuggestion = document.querySelector(this.SELECTORS.firstSuggestion);
+      if (firstSuggestion) {
+        (firstSuggestion as HTMLElement).click();
+        this.log(`Selected first candidate with exact selector: ${this.SELECTORS.firstSuggestion}`);
+        return true;
+      }
+
+      // フォールバック: 一般的なセレクターで候補を探す
+      const candidateSelectors = [
+        'body > div.peoplekit-autocomplete-anchor ul[role="listbox"] div[role="option"]:first-child',
+        'ul[role="listbox"] div[role="option"]:first-child',
+        '[role="listbox"] li:first-child',
+        '.suggestion-item:first-child',
+        '.dropdown-item:first-child',
+        '[data-testid*="suggestion"]:first-child',
+        '.autocomplete-item:first-child',
+        'li[role="option"]:first-child',
+        '.user-suggestion:first-child'
+      ];
+
+      for (const selector of candidateSelectors) {
+        try {
+          const element = await this.waitForElement(selector, 2000);
+          if (element) {
+            (element as HTMLElement).click();
+            this.log(`Selected first candidate with selector: ${selector}`);
+            return true;
+          }
+        } catch (error) {
+          // 次のセレクターを試す
+          continue;
+        }
+      }
+
+      // Enterキーを押して候補を選択
+      const inputElement = document.querySelector(this.SELECTORS.emailInputExact) as HTMLInputElement ||
+                          document.querySelector(this.SELECTORS.emailInput) as HTMLInputElement;
+      if (inputElement) {
+        inputElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        this.log('Pressed Enter to select candidate');
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      this.log('Failed to select first candidate:', error);
+      return false;
+    }
   }
 
   // 候補の一番上を選択
